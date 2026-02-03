@@ -144,3 +144,31 @@ comm.Reduce(local_val, u_tip_global, op=MPI.SUM, root=0)
 if comm.rank == 0:
     print("Tip displacement at (L, H/2, W/2): ux =", u_tip_global[0],
           " uy =", u_tip_global[1], " uz =", u_tip_global[2])
+# ------------------------------------------------------------
+# 9) Von Mises stress (3D)
+# ------------------------------------------------------------
+def sigma(u):
+    return 2.0 * mu * eps(u) + lmbda * ufl.tr(eps(u)) * ufl.Identity(gdim)
+
+s = sigma(uh) - (1.0 / 3.0) * ufl.tr(sigma(uh)) * ufl.Identity(gdim)
+von_mises_expr = ufl.sqrt(3.0 / 2.0 * ufl.inner(s, s))
+
+V_vm = fem.functionspace(domain, ("DG", 0))
+von_mises = fem.Function(V_vm)
+von_mises.name = "von_mises"
+
+problem_vm = LinearProblem(
+    ufl.inner(ufl.TrialFunction(V_vm), ufl.TestFunction(V_vm)) * ufl.dx,
+    ufl.inner(von_mises_expr, ufl.TestFunction(V_vm)) * ufl.dx,
+    petsc_options_prefix="vm_",
+    petsc_options={"ksp_type": "cg", "pc_type": "jacobi"},
+)
+
+von_mises = problem_vm.solve()
+von_mises.name = "von_mises"
+
+
+with XDMFFile(domain.comm, "cantilever_3d.xdmf", "w") as xdmf:
+    xdmf.write_mesh(domain)
+    xdmf.write_function(uh)
+    xdmf.write_function(von_mises)
