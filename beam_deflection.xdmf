@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="3.0" xmlns:xi="https://www.w3.org/2001/XInclude">
+  <Domain>
+    <Grid Name="mesh" GridType="Uniform">
+      <Topology TopologyType="Hexahedron" NumberOfElements="90" NodesPerElement="8">
+        <DataItem Dimensions="90 8" NumberType="Int" Format="HDF">beam_deflection.h5:/Mesh/mesh/topology</DataItem>
+      </Topology>
+      <Geometry GeometryType="XYZ">
+        <DataItem Dimensions="176 3" Format="HDF">beam_deflection.h5:/Mesh/mesh/geometry</DataItem>
+      </Geometry>
+    </Grid>
+    <Grid Name="Displacement Vector" GridType="Collection" CollectionType="Temporal">
+      <Grid Name="Displacement Vector" GridType="Uniform">
+        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
+        <Time Value="0" />
+        <Attribute Name="Displacement Vector" AttributeType="Vector" Center="Node">
+          <DataItem Dimensions="176 3" Format="HDF">beam_deflection.h5:/Function/Displacement Vector/0</DataItem>
+        </Attribute>
+      </Grid>
+    </Grid>
+    <Grid Name="von Mises stress" GridType="Collection" CollectionType="Temporal">
+      <Grid Name="von Mises stress" GridType="Uniform">
+        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
+        <Time Value="0" />
+        <Attribute Name="von Mises stress" AttributeType="Scalar" Center="Node">
+          <DataItem Dimensions="176 1" Format="HDF">beam_deflection.h5:/Function/von Mises stress/0</DataItem>
+        </Attribute>
+      </Grid>
+    </Grid>
+  </Domain>
+</Xdmf>
