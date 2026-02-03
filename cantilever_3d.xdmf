@@ -23,8 +23,8 @@
       <Grid Name="von_mises" GridType="Uniform">
         <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
         <Time Value="0" />
-        <Attribute Name="von_mises" AttributeType="Scalar" Center="Cell">
-          <DataItem Dimensions="34560 1" Format="HDF">cantilever_3d.h5:/Function/von_mises/0</DataItem>
+        <Attribute Name="von_mises" AttributeType="Scalar" Center="Node">
+          <DataItem Dimensions="7137 1" Format="HDF">cantilever_3d.h5:/Function/von_mises/0</DataItem>
         </Attribute>
       </Grid>
     </Grid>
