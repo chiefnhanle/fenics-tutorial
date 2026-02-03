@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -6,19 +7,34 @@ import dolfinx
 from dolfinx import mesh, fem
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.geometry import bb_tree, compute_collisions_points, compute_colliding_cells
-from dolfinx.io import VTXWriter  # <-- KEY CHANGE
+from dolfinx.io import VTXWriter
 import ufl
 
 print("FEniCSx version:", dolfinx.__version__)
 comm = MPI.COMM_WORLD
 
 # ------------------------------------------------------------
+# 0) Output directory: Windows path via WSL mount
+# ------------------------------------------------------------
+WIN_DIR = r"C:\Users\Nhan Le\Downloads\deflection"
+WSL_DIR = "/mnt/c/Users/Nhan Le/Downloads/deflection"
+
+outdir = WSL_DIR if os.path.exists("/mnt/c") else WIN_DIR
+
+if comm.rank == 0:
+    os.makedirs(outdir, exist_ok=True)
+comm.Barrier()
+
+bp_path = os.path.join(outdir, "cantilever_3d.bp")  # ParaView opens this directly
+
+# ------------------------------------------------------------
 # 1) 3D Beam geometry + mesh
 # ------------------------------------------------------------
-L = 1.0
-H = 0.2
-W = 0.1
-nx, ny, nz = 60, 12, 8
+L = 5.0    # beam length (x)
+H = 0.3    # depth / vertical (y)
+W = 0.1    # width (z)
+
+nx, ny, nz = 60, 20, 8
 
 domain = mesh.create_box(
     comm,
@@ -61,7 +77,12 @@ facet_tags = mesh.meshtags(domain, fdim, right_facets, facet_values)
 ds = ufl.Measure("ds", domain=domain, subdomain_data=facet_tags)
 
 T = 1.0e-2
-t = fem.Constant(domain, PETSc.ScalarType((0.0, 0.0, -T)))  # down in -z
+
+# You defined H as vertical depth (y), so "down" is -y:
+t = fem.Constant(domain, PETSc.ScalarType((0.0, -T, 0.0)))
+
+# If you *instead* want down in -z, use:
+# t = fem.Constant(domain, PETSc.ScalarType((0.0, 0.0, -T)))
 
 # ------------------------------------------------------------
 # 5) 3D linear elasticity
@@ -108,31 +129,29 @@ s_dev = sig_uh - (1.0 / 3.0) * ufl.tr(sig_uh) * ufl.Identity(gdim)
 von_mises_expr = ufl.sqrt(3.0 / 2.0 * ufl.inner(s_dev, s_dev))
 
 V_vm = fem.functionspace(domain, ("Lagrange", 1))
-vm = fem.Function(V_vm)
-vm.name = "von_mises"
-
 vm_trial = ufl.TrialFunction(V_vm)
 vm_test = ufl.TestFunction(V_vm)
 
 problem_vm = LinearProblem(
     ufl.inner(vm_trial, vm_test) * ufl.dx,
-    ufl.inner(von_mises_expr, vm_test) * ufl.dx,
+    von_mises_expr * vm_test * ufl.dx,   # <- cleaner than inner(scalar, test)
     petsc_options_prefix="vm_",
     petsc_options={"ksp_type": "cg", "pc_type": "jacobi"},
 )
+
 vm = problem_vm.solve()
 vm.name = "von_mises"
 vm.x.scatter_forward()
 
 # ------------------------------------------------------------
-# 8) Export to ParaView using VTX (ADIOS2) -- fixes "partial"
+# 8) Export to ParaView using VTX (ADIOS2)
 # ------------------------------------------------------------
-# Produces a folder/file: cantilever_3d.bp  (open directly in ParaView)
-with VTXWriter(domain.comm, "cantilever_3d.bp", [uh, vm], engine="BP4") as vtx:
+with VTXWriter(domain.comm, bp_path, [uh, vm], engine="BP4") as vtx:
     vtx.write(0.0)
 
 if comm.rank == 0:
-    print("Wrote: cantilever_3d.bp (open this in ParaView)")
+    print("Wrote:", bp_path)
+    print("Open in ParaView: cantilever_3d.bp")
     print("Fields: displacement (vector), von_mises (scalar)")
 
 # ------------------------------------------------------------
@@ -143,7 +162,6 @@ tree = bb_tree(domain, domain.topology.dim)
 candidates = compute_collisions_points(tree, points)
 cells = compute_colliding_cells(domain, candidates, points)
 
-local_val = None
 if len(cells.links(0)) > 0:
     cell = cells.links(0)[0]
     u_tip = uh.eval(points[0], cell)

@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -13,10 +14,25 @@ print("FEniCSx version:", dolfinx.__version__)
 comm = MPI.COMM_WORLD
 
 # ------------------------------------------------------------
+# OUTPUT: write to Windows Downloads\deflection via WSL mount
+# ------------------------------------------------------------
+WIN_OUTDIR = r"C:\Users\Nhan Le\Downloads\deflection"
+WSL_OUTDIR = "/mnt/c/Users/Nhan Le/Downloads/deflection"  # WSL-visible path
+
+# If you might also run this natively on Windows (not WSL), pick path accordingly:
+outdir = WSL_OUTDIR if os.path.exists("/mnt/c") else WIN_OUTDIR
+
+if comm.rank == 0:
+    os.makedirs(outdir, exist_ok=True)
+comm.Barrier()
+
+xdmf_path = os.path.join(outdir, "cantilever.xdmf")
+
+# ------------------------------------------------------------
 # 1) Beam geometry + mesh
 # ------------------------------------------------------------
-L = 1.0     # length
-H = 0.2     # height
+L = 0.3    # length
+H = 1   # height
 nx = 60
 ny = 12
 
@@ -87,7 +103,7 @@ a = ufl.inner(sigma(u), eps(v)) * ufl.dx
 Lform = ufl.dot(t, v) * ds(right_tag)
 
 # ------------------------------------------------------------
-# 6) Solve (your build requires petsc_options_prefix)
+# 6) Solve
 # ------------------------------------------------------------
 problem = LinearProblem(
     a, Lform,
@@ -103,15 +119,15 @@ uh = problem.solve()
 uh.name = "displacement"
 
 # ------------------------------------------------------------
-# 7) Export to ParaView (XDMF)
+# 7) Export to ParaView (XDMF) in Windows folder via WSL mount
 # ------------------------------------------------------------
-# Produces: cantilever.xdmf + cantilever.h5
-with XDMFFile(domain.comm, "cantilever.xdmf", "w") as xdmf:
+with XDMFFile(domain.comm, xdmf_path, "w") as xdmf:
     xdmf.write_mesh(domain)
     xdmf.write_function(uh)
 
 if comm.rank == 0:
-    print("Wrote: cantilever.xdmf (open this in ParaView)")
+    # Note: .h5 will be created next to the .xdmf with the same basename
+    print("Wrote:", xdmf_path, "(open this in ParaView on Windows)")
 
 # ------------------------------------------------------------
 # 8) Optional: print tip displacement at (L, H/2)
